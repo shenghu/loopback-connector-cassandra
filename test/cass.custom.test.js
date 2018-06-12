@@ -206,8 +206,9 @@ describe('cassandra custom tests', function() {
   });
 
   var ID_1;
+  var ROW_1;
 
-  it('create sortable 1', function(done) {
+  it.only('create sortable 1', function(done) {
     CASS_SORTABLE.create({
       str: cassTestString + '10',
       num: 10,
@@ -223,6 +224,7 @@ describe('cassandra custom tests', function() {
         patNum: 100,
         patBool: true });
       ID_1 = m.id;
+      ROW_1 = m;
       done();
     });
   });
@@ -349,6 +351,24 @@ describe('cassandra custom tests', function() {
   it('find by secondary key without primary key', function(done) {
     CASS_SORTABLE.find(
       {where: {yearMonth: '2015-04'}}, function(err, rows) {
+        should.not.exist(err);
+        rows.should.have.length(2); // num DESC
+        rows[0].str.should.eql(cassTestString + '50');
+        rows[1].str.should.eql(rows[0].str);
+        rows[0].num.should.be.eql(60);
+        rows[1].num.should.be.eql(50);
+        done();
+      });
+  });
+
+  it.only('update attributes', function(done) {
+    ROW_1.updateAttributes({ 
+      str: ROW_1.str,
+      num: ROW_1.num,
+      patBool: ROW_1.patBool,
+      patNum: ROW_1.patNum,
+      patStr: ROW_1.patStr,
+      yearMonth: '2018-06'}, function(err, rows) {
         should.not.exist(err);
         rows.should.have.length(2); // num DESC
         rows[0].str.should.eql(cassTestString + '50');
