@@ -11,6 +11,7 @@
 var DataSource = require('loopback-datasource-juggler').DataSource;
 var cassandra = require('cassandra-driver');
 var cassConnector = require('../lib/cassandra');
+var uuid = require('uuid');
 var should = require('should');
 
 var db, CASS, CASS_SORTABLE, CASS_TUPLE_TIME;
@@ -208,7 +209,7 @@ describe('cassandra custom tests', function() {
   var ID_1;
   var ROW_1;
 
-  it.only('create sortable 1', function(done) {
+  it('create sortable 1', function(done) {
     CASS_SORTABLE.create({
       str: cassTestString + '10',
       num: 10,
@@ -361,20 +362,21 @@ describe('cassandra custom tests', function() {
       });
   });
 
-  it.only('update attributes', function(done) {
+  it('update attributes', function(done) {
     ROW_1.updateAttributes({ 
       str: ROW_1.str,
       num: ROW_1.num,
       patBool: ROW_1.patBool,
       patNum: ROW_1.patNum,
       patStr: ROW_1.patStr,
-      yearMonth: '2018-06'}, function(err, rows) {
+      yearMonth: '2018-06'}, function(err, row) {
         should.not.exist(err);
-        rows.should.have.length(2); // num DESC
-        rows[0].str.should.eql(cassTestString + '50');
-        rows[1].str.should.eql(rows[0].str);
-        rows[0].num.should.be.eql(60);
-        rows[1].num.should.be.eql(50);
+        should.equal(row.str, ROW_1.str);
+        should.equal(row.num, ROW_1.num);
+        should.equal(row.partNum, ROW_1.partNum);
+        should.equal(row.partBool, ROW_1.partBool);
+        should.equal(row.yearMonth, '2018-06');
+        should.equal(row.partStr, ROW_1.partStr);
         done();
       });
   });
@@ -424,6 +426,114 @@ describe('cassandra custom tests', function() {
       done();
     });
   });
+
+  describe('collections', function () {
+    var CASS_COLLECTIONS;
+
+    before(function (done) {
+      CASS_COLLECTIONS = db.define('CASS_COLLECTIONS', {
+        id: { type: String, id: true },
+        mapData: {
+          type: Object,
+          cassandra: {
+            dataType: 'Map<Text, Text>'
+          }
+        },
+        setData: {
+          type: Array,
+          cassandra: {
+            dataType: 'Set<Text>'
+          }
+        },
+        listData: {
+          type: [String],
+          cassandra: {
+            dataType: 'List<Text>'
+          }
+        },
+        strAttr: [String],
+      });
+
+      db.automigrate(['CASS_COLLECTIONS'], done);
+    });
+
+    it('create', function (done) {
+      var data = {
+        id: uuid.v1(),
+        mapData: {key: 'test', value: 'ok'},
+        setData: ['a', 'b'],
+        listData: ['1', '2'],
+        strAttr: ['array', 'with', 'no', 'datatype'],
+      };
+      CASS_COLLECTIONS.create(data, function (err, instance) {
+        should.not.exists(err);
+
+        var m = instance.toJSON();
+        m.id.should.equal(data.id);
+        m.mapData.should.deepEqual(data.mapData);
+
+        m.setData.should.be.an.Array();
+        m.setData.should.deepEqual(data.setData);
+
+        m.listData.should.be.an.Array();
+        m.listData.should.deepEqual(data.listData);
+
+        m.strAttr.should.deepEqual(data.strAttr);
+        ROW = instance;
+        ID = instance.id;
+        done();
+      });
+    });
+
+    it('updateAttributes', function (done) {
+      var data = {
+        id: ID, 
+        mapData: {value: 'updated'},
+        listData: ['3'],
+        setData: ['d'],
+        strAttr: ['update', 'array', 'with', 'no', 'datatype'],
+      };
+      ROW.updateAttributes(data, function (err, instance) {
+        should.not.exists(err);
+
+        var m = instance.toJSON();
+        m.id.should.be.equal(ID);
+        m.mapData.should.deepEqual(data.mapData);
+        should.not.exists(m.mapData.key);
+
+        m.listData.should.be.an.Array();
+        m.listData.should.deepEqual(data.listData);
+
+        m.setData.should.be.an.Array();
+        m.setData.should.deepEqual(data.setData);
+
+        m.strAttr.should.deepEqual(data.strAttr);
+
+        ROW = instance;
+        done();
+      });
+    });
+
+    it('findById', function (done) {
+      CASS_COLLECTIONS.findById(ID, function (err, instance) {
+        should.not.exists(err);
+
+        var m = instance.toJSON();
+        var expected = ROW.toJSON()
+        m.id.should.be.equal(ID);
+        m.mapData.should.deepEqual(expected.mapData);
+
+        m.listData.should.be.an.Array();
+        m.listData.should.deepEqual(expected.listData);
+
+        m.setData.should.be.an.Array();
+        m.setData.should.deepEqual(expected.setData);
+
+        m.strAttr.should.deepEqual(expected.strAttr);
+        done();
+      });
+    });
+  });  
 
   var targetTable = 'CASS_SORTABLE';
 
